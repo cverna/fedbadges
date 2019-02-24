@@ -8,3 +8,4 @@ requests
 dogpile.cache
 psutil
 moksha
+fedora-messaging

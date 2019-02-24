@@ -1,0 +1,30 @@
+# Define the callback function called by fedora-messaging consume
+callback = "fedbages.consumers:FedoraBadgesConsumer"
+
+[[bindings]]
+queue = "fedora-badges"
+exchange = "amq.topic"
+routing_keys = ["*"]
+
+# Define a queue
+[queues.fedora-badges]
+durable = true
+auto_delete = false
+exclusive = false
+arguments = {}
+
+[consumer_config]
+badges_yaml_directory = "tests/test_badges"
+
+database_uri = "sqlite:////tmp/test-badges-sqlite.db"
+datanommer_sqlalchemy_url = "sqlite:///datanommer.db"
+fedbadges_datagrepper_url = "https://apps.fedoraproject.org/datagrepper"
+
+[consumer_config.badge_issuer]
+issuer_id = "Fedora Project"
+issuer_origin = "http://badges.fedoraproject.com"
+issuer_name = "Fedora Project"
+issuer_org = "http://fedoraproject.org"
+issuer_contact = "badges@fedoraproject.org"
+
+

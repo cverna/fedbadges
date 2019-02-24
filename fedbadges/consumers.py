@@ -12,7 +12,7 @@ import transaction
 import threading
 import time
 
-import fedmsg.consumers
+from fedora_messaging.config import conf
 
 import tahrir_api.dbapi
 import datanommer.models
@@ -26,25 +26,19 @@ import fedbadges.rules
 import fedbadges.utils
 
 import logging
-log = logging.getLogger("moksha.hub")
+log = logging.getLogger("fedora-messaging.fedbages")
 
 
-class FedoraBadgesConsumer(fedmsg.consumers.FedmsgConsumer):
-    topic = "*"
-    config_key = "fedmsg.consumers.badges.enabled"
-    consume_delay = 3
-    delay_limit = 100
+class FedoraBadgesConsumer(object):
+    """
+    A fedora-messaging consumer that is the heart of fedbages.
 
-    def __init__(self, hub):
+    This consumer subscribes to all the topics
+    """
+
+    def __init__(self):
+        self.config = conf["consumer_config"]
         self.badge_rules = []
-        self.hub = hub
-
-        super(FedoraBadgesConsumer, self).__init__(hub)
-
-        self.consume_delay = int(self.hub.config.get('badges.consume_delay',
-                                                     self.consume_delay))
-        self.delay_limit = int(self.hub.config.get('badges.delay_limit',
-                                                   self.delay_limit))
 
         # Five things need doing at start up time
         # 0) Set up a request local to hang thread-safe db sessions on.
@@ -64,16 +58,16 @@ class FedoraBadgesConsumer(fedmsg.consumers.FedmsgConsumer):
         self._initialize_datanommer_connection()
 
         # Load badge definitions
-        directory = hub.config.get("badges.yaml.directory", "badges_yaml_dir")
+        directory = self.config.get("badges_yaml_directory")
         self.badge_rules = self._load_badges_from_yaml(directory)
 
     def _initialize_tahrir_connection(self):
         if hasattr(self.l, 'tahrir'):
             return
 
-        global_settings = self.hub.config.get("badges_global", {})
+        global_settings = self.config.get("badges_global", {})
 
-        database_uri = global_settings.get('database_uri')
+        database_uri = self.config.get("database_uri")
         if not database_uri:
             raise ValueError('Badges consumer requires a database uri')
 
@@ -87,7 +81,7 @@ class FedoraBadgesConsumer(fedmsg.consumers.FedmsgConsumer):
             autocommit=False,
             notification_callback=fedbadges.utils.notification_callback,
         )
-        issuer = global_settings.get('badge_issuer')
+        issuer = self.config.get("badge_issuer")
 
         transaction.begin()
         self.issuer_id = self.l.tahrir.add_issuer(
@@ -99,7 +93,7 @@ class FedoraBadgesConsumer(fedmsg.consumers.FedmsgConsumer):
         transaction.commit()
 
     def _initialize_datanommer_connection(self):
-        datanommer.models.init(self.hub.config['datanommer.sqlalchemy.url'])
+        datanommer.models.init(self.config.get("datanommer_sqlalchemy_url"))
 
     def _load_badges_from_yaml(self, directory):
         # badges indexed by trigger
@@ -215,7 +209,7 @@ class FedoraBadgesConsumer(fedmsg.consumers.FedmsgConsumer):
         msg = msg['body']
 
         default = "https://apps.fedoraproject.org/datagrepper"
-        link = self.hub.config.get('fedbadges.datagrepper_url', default) + \
+        link = self.config.get('fedbadges_datagrepper_url') + \
             "/id?id=%s&is_raw=true&size=extra-large" % msg['msg_id']
 
         # Define this so we can refer to it in error handling below
