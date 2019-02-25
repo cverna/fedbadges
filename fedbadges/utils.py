@@ -1,11 +1,13 @@
 """ Utilities for fedbadges that don't quite fit anywhere else. """
 
 import types
+import json
 
 import logging
-log = logging.getLogger("moksha.hub")
 
-import fedmsg
+from fedora_messaging.api import Message, publish
+from fedora_messaging.exceptions import PublishReturned, ConnectionException
+
 import fedora.client
 import requests
 
@@ -13,18 +15,11 @@ import requests
 from dogpile.cache import make_region
 _cache = make_region()
 
-
-# These are here just so they're available in globals()
-# for compiling lambda expressions
-import json
-import re
-import fedmsg.config
-import fedmsg.encoding
-import fedmsg.meta
+log = logging.getLogger("fedora-messaging.fedbages")
 
 
 def construct_substitutions(msg):
-    """ Convert a fedmsg message into a dict of substitutions. """
+    """ Convert a message into a dict of substitutions. """
     subs = {}
     for key1 in msg:
         if isinstance(msg[key1], dict):
@@ -105,12 +100,19 @@ def notification_callback(topic, msg):
     """ This is a callback called by tahrir_api whenever something
     it deems important has happened.
 
-    It is just used to publish fedmsg messages.
+    It is just used to publish fedora messaging messages.
     """
-    fedmsg.publish(
-        topic=topic,
-        msg=msg,
-    )
+
+    try:
+        msg = Message(
+            topic=topic,
+            body=msg,
+        )
+        publish(msg)
+    except PublishReturned as e:
+        print("Fedora Messaging broker rejected message {}: {}".format(msg.id, e))
+    except ConnectionException as e:
+        print("Error sending message {}: {}".format(msg.id, e))
 
 
 def user_exists_in_fas(config, user):
@@ -127,7 +129,7 @@ def user_exists_in_fas(config, user):
 def get_pkgdb_packages_for(config, user):
     """ Retrieve the list of packages where the specified user some acl.
 
-    :arg config: a dict containing the fedmsg config
+    :arg config: a dict containing the messaging config
     :arg user: the fas user of the packager whose packages are of
         interest.
     :return: a set listing all the packages where the specified user has
